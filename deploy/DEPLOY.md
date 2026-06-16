@@ -1,6 +1,6 @@
 # Deploying to your Ubuntu server
 
-App code lives at `/mnt/apps/mayhem-tracker`, the SQLite DB at `/mnt/data/mayhem-tracker` — separate mounts, set via `DATA_DIR` in the systemd unit.
+App code lives at `/mnt/apps/mayhem-tracker`, the SQLite DB at `/mnt/data/mayhem-tracker` — separate mounts, set via `DATA_DIR` in `deploy/ecosystem.config.cjs`. Runs under your own user (`svilen`) via pm2.
 
 ## 1. Get the code + dependencies onto the server
 
@@ -22,25 +22,27 @@ npm run build -w @mayhem-tracker/web
 
 (Re-run this any time you pull web UI changes; the server (`npm run start`) reads source via `tsx` directly, no separate server build step needed.)
 
-## 3. Create a dedicated user (optional but recommended)
+## 3. Install pm2 and start the app
 
 ```bash
-sudo useradd -r -s /usr/sbin/nologin mayhem
-sudo chown -R mayhem:mayhem /mnt/apps/mayhem-tracker /mnt/data/mayhem-tracker
+sudo npm install -g pm2
+cd /mnt/apps/mayhem-tracker
+pm2 start deploy/ecosystem.config.cjs
+pm2 status
 ```
 
-If you'd rather run it as yourself, just change `User=` in the systemd unit below to your username.
+It listens on `127.0.0.1:3001` only — not exposed externally. Data lives in `/mnt/data/mayhem-tracker` (set via `DATA_DIR` in `deploy/ecosystem.config.cjs`).
 
-## 4. Install the systemd service
+## 4. Make it survive a reboot
 
 ```bash
-sudo cp deploy/mayhem-tracker.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now mayhem-tracker
-sudo systemctl status mayhem-tracker
+pm2 save
+pm2 startup
 ```
 
-It listens on `127.0.0.1:3001` only — not exposed externally. Data lives in `/mnt/data/mayhem-tracker` (set via `DATA_DIR` in the unit file).
+`pm2 startup` prints a `sudo env PATH=... pm2 startup systemd -u svilen --hp /home/svilen` command — copy/paste and run exactly what it prints (it installs a systemd unit for pm2 itself, scoped to your user). Then `pm2 save` again if you add/change processes later, so the saved list stays current.
+
+(`deploy/mayhem-tracker.service` is a plain-systemd alternative to pm2 if you ever want to drop pm2 — not needed if you're using pm2.)
 
 ## 5. nginx + TLS + Cloudflare
 
@@ -96,5 +98,5 @@ cd /mnt/apps/mayhem-tracker
 git pull
 npm install
 npm run build -w @mayhem-tracker/web
-sudo systemctl restart mayhem-tracker
+pm2 restart mayhem-tracker
 ```
