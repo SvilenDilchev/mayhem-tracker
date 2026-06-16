@@ -2,6 +2,7 @@ import { SERVER_URL, AGENT_TOKEN, IS_COMPILED } from "./config.js";
 import { connect, fetchCurrentSummoner, fetchMatchHistoryByPuuid, fetchMatchHistory, fetchGameDetails } from "./lcu.js";
 import { hasSent, markSent, isAutostartRegistered, markAutostartRegistered } from "./state.js";
 import { registerAutostart } from "./autostart.js";
+import { initTray } from "./tray.js";
 
 const POLL_INTERVAL_MS = 60_000;
 const CONNECT_RETRY_MS = 5_000;
@@ -57,6 +58,8 @@ async function pollOnce(): Promise<void> {
 
 async function main() {
   console.log(`Mayhem Tracker agent starting, server=${SERVER_URL}`);
+
+  initTray();
 
   if (IS_COMPILED && !isAutostartRegistered()) {
     registerAutostart();

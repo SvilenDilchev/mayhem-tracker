@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "npm run build -w @mayhem-tracker/web",
     "preview": "electron-vite preview",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "dist": "electron-vite build && electron-builder --win",

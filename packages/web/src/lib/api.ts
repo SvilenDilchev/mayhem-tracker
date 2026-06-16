@@ -51,12 +51,7 @@ export const api = {
 
   getAugmentData: () => getJson("/api/augment-data"),
 
-  // No push channel from server to browser yet — poll instead. Good enough for a few
-  // friends checking a shared dashboard; not meant to feel like a live match tracker.
-  onGamesUpdated: (callback: () => void) => {
-    const interval = setInterval(callback, 30_000);
-    return () => clearInterval(interval);
-  },
+  onGamesUpdated: (_callback: () => void) => () => {},
 
   getSetting: (key: string) => getJson(`/api/settings/${key}`),
 
