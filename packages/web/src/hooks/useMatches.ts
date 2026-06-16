@@ -3,7 +3,7 @@ import type { MatchListItem } from "../lib/types";
 
 const PAGE_SIZE = 20;
 
-export function useMatches(championId?: number) {
+export function useMatches(championId?: number, puuid?: string) {
   const [matches, setMatches] = useState<MatchListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -16,8 +16,8 @@ export function useMatches(championId?: number) {
       try {
         const result =
           championId !== undefined
-            ? await window.api.getChampionMatchHistory(championId, PAGE_SIZE, offset)
-            : await window.api.getMatchHistory(PAGE_SIZE, offset);
+            ? await window.api.getChampionMatchHistory(championId, PAGE_SIZE, offset, puuid)
+            : await window.api.getMatchHistory(PAGE_SIZE, offset, puuid);
         if (reset) {
           setMatches(result.matches);
         } else {
@@ -29,15 +29,14 @@ export function useMatches(championId?: number) {
         setLoading(false);
       }
     },
-    [championId, matches.length],
+    [championId, puuid, matches.length],
   );
 
   useEffect(() => {
     load(true);
-
     const unsub = window.api.onGamesUpdated(() => load(true));
     return unsub;
-  }, [championId]);
+  }, [championId, puuid]);
 
   const loadMore = useCallback(() => {
     if (!loading && hasMore) load(false);

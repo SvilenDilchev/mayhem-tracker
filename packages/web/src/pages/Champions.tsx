@@ -135,16 +135,11 @@ function ChampionExpanded({ championId }: { championId: number }) {
 
 export default function Champions() {
   const champData = useChampionData();
-  const { data, loading, refetch } = useIpc<ChampionStats[]>(() => window.api.getChampionStats());
+  const { data, loading } = useIpc<ChampionStats[]>(() => window.api.getChampionStats());
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("games");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
-
-  useEffect(() => {
-    const unsub = window.api.onGamesUpdated(() => refetch());
-    return unsub;
-  }, [refetch]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {

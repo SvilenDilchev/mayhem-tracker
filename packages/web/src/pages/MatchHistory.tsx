@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useMatches } from "../hooks/useMatches";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
 import { useIpc } from "../hooks/useIpc";
+import { useAccount } from "../lib/AccountContext";
 import type { MatchListItem, MatchDetail, DashboardData, ParsedParticipant } from "../lib/types";
 import { parseParticipants, groupByTeam } from "../lib/participants";
 import ChampionIcon from "../components/ChampionIcon";
@@ -12,20 +13,27 @@ import StatCard from "../components/StatCard";
 import { formatDuration, formatTimeAgo, formatKDA, kdaRatio } from "../lib/format";
 
 export default function MatchHistory() {
-  const { matches, total, loading, hasMore, loadMore } = useMatches();
+  const { summoners } = useAccount();
+  const [filterPuuid, setFilterPuuid] = useState<string | null>(null);
+  const { matches, total, loading, hasMore, loadMore } = useMatches(undefined, filterPuuid ?? undefined);
   const champData = useChampionData();
-  const { data: dashboard, refetch: refetchDashboard } = useIpc<DashboardData>(() =>
-    window.api.getDashboard(),
+  const { data: dashboard } = useIpc<DashboardData>(
+    () => window.api.getDashboard(filterPuuid ?? undefined),
+    [filterPuuid],
   );
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [puuids, setPuuids] = useState<string[] | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    window.api.getAllSummonerPuuids().then(setPuuids);
-  }, []);
+  // All tracked puuids for participant highlighting in match detail
+  const puuids = summoners.map((s) => s.puuid);
+
+  // Build a map of puuid → display name for the player badge on each game row
+  const summonerMap = useMemo(
+    () => new Map(summoners.map((s) => [s.puuid, s.game_name ?? s.puuid.slice(0, 8)])),
+    [summoners],
+  );
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -40,10 +48,6 @@ export default function MatchHistory() {
     return () => observer.disconnect();
   }, [loadMore]);
 
-  useEffect(() => {
-    const unsub = window.api.onGamesUpdated(() => refetchDashboard());
-    return unsub;
-  }, [refetchDashboard]);
 
   const toggleExpand = useCallback(
     async (gameId: number) => {
@@ -108,9 +112,30 @@ export default function MatchHistory() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl font-bold text-lol-text-bright">Match History</h1>
-        <span className="text-sm text-lol-text">{total} games</span>
+        <div className="flex items-center gap-2">
+          {summoners.length > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setFilterPuuid(null)}
+                className={`px-3 py-1 rounded text-xs transition-colors ${filterPuuid === null ? "bg-lol-gold/20 text-lol-gold" : "text-lol-text hover:text-lol-text-bright"}`}
+              >
+                All
+              </button>
+              {summoners.map((s) => (
+                <button
+                  key={s.puuid}
+                  onClick={() => setFilterPuuid(s.puuid)}
+                  className={`px-3 py-1 rounded text-xs transition-colors ${filterPuuid === s.puuid ? "bg-lol-gold/20 text-lol-gold" : "text-lol-text hover:text-lol-text-bright"}`}
+                >
+                  {s.game_name ?? s.puuid.slice(0, 8)}
+                </button>
+              ))}
+            </div>
+          )}
+          <span className="text-sm text-lol-text">{total} games</span>
+        </div>
       </div>
 
       {matches.length === 0 && !loading && (
@@ -129,6 +154,7 @@ export default function MatchHistory() {
             detail={expandedId === m.game_id ? detail : null}
             detailLoading={expandedId === m.game_id && detailLoading}
             puuids={puuids}
+            playerName={m.puuid ? summonerMap.get(m.puuid) : undefined}
             onToggle={() => toggleExpand(m.game_id)}
           />
         ))}
@@ -149,6 +175,7 @@ interface GameRowProps {
   detail: MatchDetail | null;
   detailLoading: boolean;
   puuids: string[] | null;
+  playerName?: string;
   onToggle: () => void;
 }
 
@@ -200,6 +227,7 @@ function GameRow({
   detail,
   detailLoading,
   puuids,
+  playerName,
   onToggle,
 }: GameRowProps) {
   const isRemake = !!match.is_remake;
@@ -288,6 +316,9 @@ function GameRow({
         <div className="text-xs text-lol-text text-right shrink-0">
           <div>{formatDuration(match.game_duration)}</div>
           <div>{formatTimeAgo(match.game_creation)}</div>
+          {playerName && (
+            <div className="text-lol-gold/70 mt-0.5">{playerName}</div>
+          )}
         </div>
       </button>
 

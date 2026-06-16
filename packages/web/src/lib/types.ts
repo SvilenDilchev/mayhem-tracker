@@ -44,6 +44,7 @@ export interface MatchListItem {
   game_creation: number;
   game_duration: number;
   is_remake: number;
+  puuid?: string;
   champion_id: number;
   win: number;
   kills: number;
@@ -188,26 +189,35 @@ export interface ParsedParticipant {
   isSelf: boolean;
 }
 
+export interface Summoner {
+  puuid: string;
+  game_name: string | null;
+  tag_line: string | null;
+}
+
 export interface WebAPI {
   getMatchHistory: (
     limit: number,
     offset: number,
+    puuid?: string,
   ) => Promise<{ matches: MatchListItem[]; total: number }>;
   getMatchDetail: (gameId: number) => Promise<MatchDetail>;
-  getChampionStats: () => Promise<ChampionStats[]>;
-  getAugmentStats: (championId?: number) => Promise<AugmentStats[]>;
-  getAugmentStatsDetailed: () => Promise<AugmentStatsDetailed[]>;
-  getDashboard: () => Promise<DashboardData>;
+  getChampionStats: (puuid?: string) => Promise<ChampionStats[]>;
+  getAugmentStats: (championId?: number, puuid?: string) => Promise<AugmentStats[]>;
+  getAugmentStatsDetailed: (puuid?: string) => Promise<AugmentStatsDetailed[]>;
+  getDashboard: (puuid?: string) => Promise<DashboardData>;
   getChampionMatchHistory: (
     championId: number,
     limit: number,
     offset: number,
+    puuid?: string,
   ) => Promise<{ matches: MatchListItem[]; total: number }>;
-  getChampionItemStats: (championId: number) => Promise<ItemStats[]>;
-  getTeammateStats: () => Promise<TeammateStats[]>;
-  getGlobalStats: () => Promise<GlobalStats>;
+  getChampionItemStats: (championId: number, puuid?: string) => Promise<ItemStats[]>;
+  getTeammateStats: (puuid?: string) => Promise<TeammateStats[]>;
+  getGlobalStats: (puuid?: string) => Promise<GlobalStats>;
   getSummonerPuuid: () => Promise<string | null>;
   getAllSummonerPuuids: () => Promise<string[]>;
+  getSummoners: () => Promise<Summoner[]>;
   getChampionData: () => Promise<ChampionData>;
   getAugmentData: () => Promise<AugmentData>;
   onGamesUpdated: (callback: () => void) => () => void;

@@ -5,12 +5,16 @@ import { requireAgentToken } from "./auth.js";
 
 export const router = Router();
 
-// ---- Read endpoints (mirrors the old Electron ipc-handlers.ts) ----
+function puuidParam(req: any): string | undefined {
+  return req.query.puuid ? String(req.query.puuid) : undefined;
+}
+
+// ---- Read endpoints ----
 
 router.get("/match-history", (req, res) => {
   const limit = parseInt(String(req.query.limit ?? "20"));
   const offset = parseInt(String(req.query.offset ?? "0"));
-  res.json(db.getMatchHistory(limit, offset));
+  res.json(db.getMatchHistory(limit, offset, puuidParam(req)));
 });
 
 router.get("/match-detail/:gameId", (req, res) => {
@@ -23,45 +27,49 @@ router.get("/match-detail/:gameId", (req, res) => {
   res.json(detail);
 });
 
-router.get("/champion-stats", (_req, res) => {
-  res.json(db.getChampionStatsAll());
+router.get("/champion-stats", (req, res) => {
+  res.json(db.getChampionStatsAll(puuidParam(req)));
 });
 
 router.get("/augment-stats", (req, res) => {
   const championId = req.query.championId ? parseInt(String(req.query.championId)) : undefined;
-  res.json(db.getAugmentStatsAll(championId));
+  res.json(db.getAugmentStatsAll(championId, puuidParam(req)));
 });
 
-router.get("/augment-stats-detailed", (_req, res) => {
-  res.json(db.getAugmentStatsWithChampions());
+router.get("/augment-stats-detailed", (req, res) => {
+  res.json(db.getAugmentStatsWithChampions(puuidParam(req)));
 });
 
-router.get("/dashboard", (_req, res) => {
-  res.json(db.getDashboardData());
+router.get("/dashboard", (req, res) => {
+  res.json(db.getDashboardData(puuidParam(req)));
 });
 
 router.get("/champion-match-history/:championId", (req, res) => {
   const championId = parseInt(req.params.championId);
   const limit = parseInt(String(req.query.limit ?? "20"));
   const offset = parseInt(String(req.query.offset ?? "0"));
-  res.json(db.getChampionMatchHistory(championId, limit, offset));
+  res.json(db.getChampionMatchHistory(championId, limit, offset, puuidParam(req)));
 });
 
 router.get("/champion-item-stats/:championId", (req, res) => {
   const championId = parseInt(req.params.championId);
-  res.json(db.getChampionItemStats(championId));
+  res.json(db.getChampionItemStats(championId, puuidParam(req)));
 });
 
-router.get("/teammate-stats", (_req, res) => {
-  res.json(db.getTeammateStats());
+router.get("/teammate-stats", (req, res) => {
+  res.json(db.getTeammateStats(puuidParam(req)));
 });
 
-router.get("/global-stats", (_req, res) => {
-  res.json(db.getGlobalStats());
+router.get("/global-stats", (req, res) => {
+  res.json(db.getGlobalStats(puuidParam(req)));
 });
 
 router.get("/all-summoner-puuids", (_req, res) => {
   res.json(db.getAllPuuids());
+});
+
+router.get("/summoners", (_req, res) => {
+  res.json(db.getAllSummoners());
 });
 
 router.get("/summoner-puuid", (_req, res) => {
@@ -107,7 +115,7 @@ router.post("/repair-puuids", (_req, res) => {
   res.json(db.repairPuuids());
 });
 
-// ---- Agent ingestion (requires a bearer token minted via create-agent) ----
+// ---- Agent ingestion ----
 
 router.post("/agent/games", requireAgentToken, (req, res) => {
   const { puuid, summonerInfo, games } = req.body ?? {};

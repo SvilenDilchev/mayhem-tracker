@@ -90,7 +90,6 @@ function createTables() {
   // Migration: add is_remake column to existing databases
   try {
     db.exec("ALTER TABLE games ADD COLUMN is_remake INTEGER NOT NULL DEFAULT 0");
-    // Retroactively detect remakes for existing games
     const games = db.prepare("SELECT game_id, game_duration, raw_json FROM games").all() as {
       game_id: number;
       game_duration: number;
@@ -110,7 +109,6 @@ function createTables() {
   try {
     db.exec("ALTER TABLE games ADD COLUMN puuid TEXT NOT NULL DEFAULT ''");
     db.exec("CREATE INDEX IF NOT EXISTS idx_games_puuid ON games(puuid)");
-    // Backfill puuid by matching stored player_stats against raw_json participants
     const gamesToBackfill = db
       .prepare(`
         SELECT g.game_id, g.raw_json,
@@ -177,9 +175,7 @@ function createTables() {
 }
 
 function detectRemake(gameDuration: number, rawJson: string | null): boolean {
-  // Very short games are always remakes
   if (gameDuration < 300) return true;
-  // Check for early surrender flag in participant data
   if (rawJson) {
     try {
       const raw = JSON.parse(rawJson);
@@ -208,9 +204,7 @@ function extractGameMaxStats(rawJson: string | null): {
   try {
     const raw = JSON.parse(rawJson);
     if (!raw?.participants) return fallback;
-    let dmg = 0,
-      taken = 0,
-      heal = 0;
+    let dmg = 0, taken = 0, heal = 0;
     for (const p of raw.participants) {
       const s = p.stats || p;
       const d = s.totalDamageDealtToChampions ?? s.totalDamageDealt ?? 0;
@@ -228,8 +222,18 @@ function extractGameMaxStats(rawJson: string | null): {
 
 // ---- Query functions ----
 
-export function getMatchHistory(limit: number, offset: number): { matches: any[]; total: number } {
-  const total = db.prepare("SELECT COUNT(*) as count FROM games").get() as any;
+export function getMatchHistory(
+  limit: number,
+  offset: number,
+  puuid?: string,
+): { matches: any[]; total: number } {
+  const pf = puuid ? " AND g.puuid = ?" : "";
+  const pp = puuid ? [puuid] : [];
+
+  const total = db
+    .prepare(`SELECT COUNT(*) as count FROM games g${puuid ? " WHERE g.puuid = ?" : ""}`)
+    .get(...(pp as [])) as any;
+
   const rows = db
     .prepare(`
     SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.puuid, g.raw_json,
@@ -240,10 +244,12 @@ export function getMatchHistory(limit: number, offset: number): { matches: any[]
            (SELECT GROUP_CONCAT(ga.augment_id) FROM game_augments ga WHERE ga.game_id = g.game_id ORDER BY ga.slot) as augment_ids
     FROM games g
     JOIN player_stats ps ON g.game_id = ps.game_id
+    WHERE 1=1${pf}
     ORDER BY g.game_creation DESC
     LIMIT ? OFFSET ?
   `)
-    .all(limit, offset);
+    .all(...pp, limit, offset);
+
   const matches = rows.map((row: any) => {
     const maxStats = extractGameMaxStats(row.raw_json);
     const { raw_json, ...match } = row;
@@ -267,7 +273,9 @@ export function getMatchDetail(gameId: number): any {
   };
 }
 
-export function getChampionStatsAll(): any[] {
+export function getChampionStatsAll(puuid?: string): any[] {
+  const pf = puuid ? " AND g.puuid = ?" : "";
+  const pp = puuid ? [puuid] : [];
   return db
     .prepare(`
     SELECT
@@ -288,14 +296,17 @@ export function getChampionStatsAll(): any[] {
       SUM(ps.penta_kills) as penta_kills
     FROM player_stats ps
     JOIN games g ON ps.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE g.is_remake = 0${pf}
     GROUP BY ps.champion_id
     ORDER BY games DESC
   `)
-    .all();
+    .all(...pp);
 }
 
-export function getAugmentStatsAll(championId?: number): any[] {
+export function getAugmentStatsAll(championId?: number, puuid?: string): any[] {
+  const pf = puuid ? " AND g.puuid = ?" : "";
+  const pp = puuid ? [puuid] : [];
+
   if (championId !== undefined) {
     return db
       .prepare(`
@@ -303,11 +314,11 @@ export function getAugmentStatsAll(championId?: number): any[] {
       FROM game_augments ga
       JOIN player_stats ps ON ga.game_id = ps.game_id
       JOIN games g ON ga.game_id = g.game_id
-      WHERE ps.champion_id = ? AND g.is_remake = 0
+      WHERE ps.champion_id = ? AND g.is_remake = 0${pf}
       GROUP BY ga.augment_id
       ORDER BY picks DESC
     `)
-      .all(championId);
+      .all(championId, ...pp);
   }
   return db
     .prepare(`
@@ -315,14 +326,17 @@ export function getAugmentStatsAll(championId?: number): any[] {
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
     JOIN games g ON ga.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE g.is_remake = 0${pf}
     GROUP BY ga.augment_id
     ORDER BY picks DESC
   `)
-    .all();
+    .all(...pp);
 }
 
-export function getDashboardData(): any {
+export function getDashboardData(puuid?: string): any {
+  const pf = puuid ? " AND g.puuid = ?" : "";
+  const pp = puuid ? [puuid] : [];
+
   const totals = db
     .prepare(`
     SELECT COUNT(*) as totalGames,
@@ -336,20 +350,20 @@ export function getDashboardData(): any {
            SUM(ps.penta_kills) as pentas
     FROM player_stats ps
     JOIN games g ON ps.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE g.is_remake = 0${pf}
   `)
-    .get() as any;
+    .get(...pp) as any;
 
   const recentForm = db
     .prepare(`
     SELECT ps.win, g.game_id
     FROM games g
     JOIN player_stats ps ON g.game_id = ps.game_id
-    WHERE g.is_remake = 0
+    WHERE g.is_remake = 0${pf}
     ORDER BY g.game_creation DESC
     LIMIT 10
   `)
-    .all();
+    .all(...pp);
 
   const topChampions = db
     .prepare(`
@@ -362,12 +376,12 @@ export function getDashboardData(): any {
       ROUND(AVG(ps.assists), 1) as avg_assists
     FROM player_stats ps
     JOIN games g ON ps.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE g.is_remake = 0${pf}
     GROUP BY ps.champion_id
     ORDER BY games DESC
     LIMIT 5
   `)
-    .all();
+    .all(...pp);
 
   const topAugments = db
     .prepare(`
@@ -375,12 +389,12 @@ export function getDashboardData(): any {
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
     JOIN games g ON ga.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE g.is_remake = 0${pf}
     GROUP BY ga.augment_id
     ORDER BY picks DESC
     LIMIT 5
   `)
-    .all();
+    .all(...pp);
 
   return {
     totalGames: totals.totalGames ?? 0,
@@ -400,23 +414,26 @@ export function getDashboardData(): any {
   };
 }
 
-export function getAugmentStatsWithChampions(): {
+export function getAugmentStatsWithChampions(puuid?: string): {
   augment_id: number;
   picks: number;
   wins: number;
   champions: { champion_id: number; picks: number; wins: number }[];
 }[] {
+  const pf = puuid ? " AND g.puuid = ?" : "";
+  const pp = puuid ? [puuid] : [];
+
   const augments = db
     .prepare(`
     SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
     JOIN games g ON ga.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE g.is_remake = 0${pf}
     GROUP BY ga.augment_id
     ORDER BY picks DESC
   `)
-    .all() as { augment_id: number; picks: number; wins: number }[];
+    .all(...pp) as { augment_id: number; picks: number; wins: number }[];
 
   const champBreakdown = db
     .prepare(`
@@ -424,18 +441,16 @@ export function getAugmentStatsWithChampions(): {
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
     JOIN games g ON ga.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE g.is_remake = 0${pf}
     GROUP BY ga.augment_id, ps.champion_id
     ORDER BY picks DESC
   `)
-    .all() as { augment_id: number; champion_id: number; picks: number; wins: number }[];
+    .all(...pp) as { augment_id: number; champion_id: number; picks: number; wins: number }[];
 
   const champMap = new Map<number, { champion_id: number; picks: number; wins: number }[]>();
   for (const row of champBreakdown) {
     if (!champMap.has(row.augment_id)) champMap.set(row.augment_id, []);
-    champMap
-      .get(row.augment_id)!
-      .push({ champion_id: row.champion_id, picks: row.picks, wins: row.wins });
+    champMap.get(row.augment_id)!.push({ champion_id: row.champion_id, picks: row.picks, wins: row.wins });
   }
 
   return augments.map((a) => ({
@@ -448,10 +463,15 @@ export function getChampionMatchHistory(
   championId: number,
   limit: number,
   offset: number,
+  puuid?: string,
 ): { matches: any[]; total: number } {
+  const pf = puuid ? " AND g.puuid = ?" : "";
+  const pp = puuid ? [puuid] : [];
+
   const total = db
-    .prepare("SELECT COUNT(*) as count FROM player_stats WHERE champion_id = ?")
-    .get(championId) as any;
+    .prepare(`SELECT COUNT(*) as count FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ?${pf}`)
+    .get(championId, ...pp) as any;
+
   const rows = db
     .prepare(`
     SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.puuid, g.raw_json,
@@ -462,11 +482,12 @@ export function getChampionMatchHistory(
            (SELECT GROUP_CONCAT(ga.augment_id) FROM game_augments ga WHERE ga.game_id = g.game_id ORDER BY ga.slot) as augment_ids
     FROM games g
     JOIN player_stats ps ON g.game_id = ps.game_id
-    WHERE ps.champion_id = ?
+    WHERE ps.champion_id = ?${pf}
     ORDER BY g.game_creation DESC
     LIMIT ? OFFSET ?
   `)
-    .all(championId, limit, offset);
+    .all(championId, ...pp, limit, offset);
+
   const matches = rows.map((row: any) => {
     const maxStats = extractGameMaxStats(row.raw_json);
     const { raw_json, ...match } = row;
@@ -481,7 +502,6 @@ export function gameExists(gameId: number): boolean {
 }
 
 export function insertGameFull(gameData: any, puuid: string): boolean {
-  // Find participant
   let participant: any = null;
   if (gameData.participants) {
     participant = gameData.participants.find((p: any) => p.puuid === puuid);
@@ -498,7 +518,6 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
   if (!participant) return false;
 
   const s = participant.stats || participant;
-
   const isRemake = detectRemake(gameData.gameDuration, JSON.stringify(gameData)) ? 1 : 0;
 
   const insertGameStmt = db.prepare(`
@@ -531,7 +550,7 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       JSON.stringify(gameData),
     );
 
-    if (result.changes === 0) return false; // duplicate
+    if (result.changes === 0) return false;
 
     insertStatsStmt.run(
       gameData.gameId,
@@ -558,7 +577,6 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       s.item6 ?? null,
     );
 
-    // Augments
     for (let i = 1; i <= 4; i++) {
       const augId = s[`playerAugment${i}`];
       if (augId && augId > 0) {
@@ -595,15 +613,24 @@ export function getAllPuuids(): string[] {
   return rows.map((r) => r.puuid);
 }
 
-export function getTeammateStats(): any[] {
-  const puuids = new Set(getAllPuuids());
-  if (puuids.size === 0) return [];
+export function getAllSummoners(): { puuid: string; game_name: string | null; tag_line: string | null }[] {
+  return db
+    .prepare("SELECT puuid, game_name, tag_line FROM summoner ORDER BY updated_at DESC")
+    .all() as any[];
+}
+
+export function getTeammateStats(puuid?: string): any[] {
+  // When a specific puuid is provided, only look at that account's games
+  // and include ALL teammates (even other tracked accounts) since they're friends.
+  // When no puuid, fall back to aggregated logic across all tracked accounts.
+  const trackedPuuids = puuid ? new Set([puuid]) : new Set(getAllPuuids());
+  if (trackedPuuids.size === 0) return [];
 
   const games = db
     .prepare(
-      "SELECT game_id, raw_json, game_creation FROM games WHERE raw_json IS NOT NULL AND is_remake = 0",
+      `SELECT game_id, raw_json, game_creation FROM games WHERE raw_json IS NOT NULL AND is_remake = 0${puuid ? " AND puuid = ?" : ""}`,
     )
-    .all() as any[];
+    .all(...(puuid ? [puuid] : [])) as any[];
 
   const playerMap = new Map<
     string,
@@ -631,7 +658,6 @@ export function getTeammateStats(): any[] {
     const participants = raw.participants || [];
     const identities = raw.participantIdentities || [];
 
-    // Find our participant to get teamId
     let myTeamId: number | null = null;
     let myParticipantId: number | null = null;
 
@@ -639,7 +665,7 @@ export function getTeammateStats(): any[] {
       const p = participants[i];
       const identity = identities[i];
       const pPuuid = p.puuid || identity?.player?.puuid;
-      if (pPuuid && puuids.has(pPuuid)) {
+      if (pPuuid && trackedPuuids.has(pPuuid)) {
         myTeamId = p.teamId || 100;
         myParticipantId = p.participantId;
         break;
@@ -648,30 +674,31 @@ export function getTeammateStats(): any[] {
 
     if (myTeamId === null) continue;
 
-    // Collect teammates (same team, not self)
     for (let i = 0; i < participants.length; i++) {
       const p = participants[i];
       const identity = identities[i];
       const teamId = p.teamId || 100;
 
       if (teamId !== myTeamId) continue;
-      const pPuuid2 = p.puuid || identity?.player?.puuid;
-      if (pPuuid2 && puuids.has(pPuuid2)) continue;
       if (p.participantId === myParticipantId) continue;
 
-      const rawPuuid = p.puuid || identity?.player?.puuid || null;
-      // Filter out placeholder/bot puuids
+      // When viewing a specific account, exclude only that account (not all tracked accounts)
+      // so your tracked friends appear as teammates.
+      const pPuuid2 = p.puuid || identity?.player?.puuid;
+      if (puuid && pPuuid2 === puuid) continue;
+      // When no puuid filter (aggregate view), still exclude all tracked accounts
+      if (!puuid && pPuuid2 && trackedPuuids.has(pPuuid2)) continue;
+
+      const rawPuuid = pPuuid2 || null;
       const playerPuuid = rawPuuid && !/^0+(-0+)*$/.test(rawPuuid) ? rawPuuid : null;
       const gameName =
         identity?.player?.gameName || identity?.player?.summonerName || p.summonerName || null;
       const tagLine = identity?.player?.tagLine || null;
       const name = gameName ? (tagLine ? `${gameName}#${tagLine}` : gameName) : `Player ${i + 1}`;
 
-      // Always prefer puuid as key
       const key = playerPuuid || name;
       const s = p.stats || p;
 
-      // If we now have a puuid but previously tracked this player by name, merge
       if (playerPuuid && !playerMap.has(playerPuuid) && playerMap.has(name)) {
         const old = playerMap.get(name)!;
         if (!old.puuid) {
@@ -696,7 +723,6 @@ export function getTeammateStats(): any[] {
       }
 
       const entry = playerMap.get(key)!;
-      // Update name to most recent version
       if (game.game_creation > entry.lastPlayed) {
         entry.name = name;
       }
@@ -732,47 +758,53 @@ export function getTeammateStats(): any[] {
 
 export function getChampionItemStats(
   championId: number,
+  puuid?: string,
 ): { item_id: number; picks: number; wins: number }[] {
+  const pf = puuid ? " AND g.puuid = ?" : "";
+  const pp = puuid ? [puuid] : [];
   return db
     .prepare(`
     SELECT item_id, COUNT(*) as picks, SUM(win) as wins
     FROM (
-      SELECT ps.item0 as item_id, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item0 IS NOT NULL AND ps.item0 > 0 AND g.is_remake = 0
+      SELECT ps.item0 as item_id, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item0 IS NOT NULL AND ps.item0 > 0 AND g.is_remake = 0${pf}
       UNION ALL
-      SELECT ps.item1, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item1 IS NOT NULL AND ps.item1 > 0 AND g.is_remake = 0
+      SELECT ps.item1, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item1 IS NOT NULL AND ps.item1 > 0 AND g.is_remake = 0${pf}
       UNION ALL
-      SELECT ps.item2, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item2 IS NOT NULL AND ps.item2 > 0 AND g.is_remake = 0
+      SELECT ps.item2, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item2 IS NOT NULL AND ps.item2 > 0 AND g.is_remake = 0${pf}
       UNION ALL
-      SELECT ps.item3, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item3 IS NOT NULL AND ps.item3 > 0 AND g.is_remake = 0
+      SELECT ps.item3, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item3 IS NOT NULL AND ps.item3 > 0 AND g.is_remake = 0${pf}
       UNION ALL
-      SELECT ps.item4, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item4 IS NOT NULL AND ps.item4 > 0 AND g.is_remake = 0
+      SELECT ps.item4, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item4 IS NOT NULL AND ps.item4 > 0 AND g.is_remake = 0${pf}
       UNION ALL
-      SELECT ps.item5, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item5 IS NOT NULL AND ps.item5 > 0 AND g.is_remake = 0
+      SELECT ps.item5, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item5 IS NOT NULL AND ps.item5 > 0 AND g.is_remake = 0${pf}
       UNION ALL
-      SELECT ps.item6, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item6 IS NOT NULL AND ps.item6 > 0 AND g.is_remake = 0
+      SELECT ps.item6, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item6 IS NOT NULL AND ps.item6 > 0 AND g.is_remake = 0${pf}
     )
     GROUP BY item_id
     ORDER BY picks DESC
   `)
     .all(
-      championId,
-      championId,
-      championId,
-      championId,
-      championId,
-      championId,
-      championId,
+      championId, ...pp,
+      championId, ...pp,
+      championId, ...pp,
+      championId, ...pp,
+      championId, ...pp,
+      championId, ...pp,
+      championId, ...pp,
     ) as any[];
 }
 
-export function getGlobalStats(): {
+export function getGlobalStats(puuid?: string): {
   champions: { champion_id: number; games: number; wins: number }[];
   augments: { augment_id: number; picks: number; wins: number }[];
   totalParticipantSlots: number;
 } {
+  const pf = puuid ? " AND puuid = ?" : "";
+  const pp = puuid ? [puuid] : [];
+
   const games = db
-    .prepare("SELECT raw_json FROM games WHERE raw_json IS NOT NULL AND is_remake = 0")
-    .all() as any[];
+    .prepare(`SELECT raw_json FROM games WHERE raw_json IS NOT NULL AND is_remake = 0${pf}`)
+    .all(...pp) as any[];
 
   const championMap = new Map<number, { games: number; wins: number }>();
   const augmentMap = new Map<number, { picks: number; wins: number }>();
@@ -879,7 +911,6 @@ export function importData(data: any): number {
     }
     return imported;
   }
-  // v2 fallback: single summoner
   const puuid = data.summoner?.puuid;
   if (!puuid) return 0;
   upsertSummoner(data.summoner);
@@ -893,7 +924,6 @@ export function importData(data: any): number {
 // ---- Repair ----
 
 export function repairPuuids(): { repairedGames: number; discoveredAccounts: number } {
-  // Step 1: Parse all games and collect participant puuids per game
   const games = db
     .prepare("SELECT game_id, raw_json FROM games WHERE raw_json IS NOT NULL")
     .all() as { game_id: number; raw_json: string }[];
@@ -927,13 +957,7 @@ export function repairPuuids(): { repairedGames: number; discoveredAccounts: num
     }
   }
 
-  // Step 2: Sort puuids by frequency (most games first)
   const sortedPuuids = Array.from(puuidToGames.entries()).sort((a, b) => b[1].size - a[1].size);
-
-  // Step 3: Greedily identify user accounts — a puuid is a user account if it
-  // never co-occurs in the same game as an already-identified user account.
-  // This filters out friends (who always appear alongside a user account)
-  // while correctly identifying alt accounts (which never share a game).
   const userPuuids = new Set<string>();
 
   for (const [puuid, gameIds] of sortedPuuids) {
@@ -948,13 +972,11 @@ export function repairPuuids(): { repairedGames: number; discoveredAccounts: num
       }
       if (coOccurs) break;
     }
-
     if (!coOccurs) {
       userPuuids.add(puuid);
     }
   }
 
-  // Step 4: For each game, find which user account is present and update puuid
   const updateStmt = db.prepare("UPDATE games SET puuid = ? WHERE game_id = ?");
   let repairedGames = 0;
 
@@ -979,7 +1001,6 @@ export function repairPuuids(): { repairedGames: number; discoveredAccounts: num
     }
   }
 
-  // Step 5: Upsert discovered summoners using the most recent name from raw_json
   const upsertStmt = db.prepare(`
     INSERT OR IGNORE INTO summoner (puuid, game_name, tag_line, summoner_id, account_id, updated_at)
     VALUES (?, ?, ?, NULL, NULL, ?)

@@ -6,7 +6,7 @@ import { initTray } from "./tray.js";
 
 const POLL_INTERVAL_MS = 60_000;
 const CONNECT_RETRY_MS = 5_000;
-const ARAM_QUEUE_ID = 2400;
+const TRACKED_QUEUES = new Set([450, 2400]); // normal ARAM + ARAM Mayhem
 
 async function submitGames(puuid: string, summonerInfo: any, games: any[]): Promise<void> {
   if (games.length === 0) return;
@@ -38,7 +38,7 @@ async function pollOnce(): Promise<void> {
   const newGames: any[] = [];
 
   for (const game of games) {
-    if (game.queueId !== ARAM_QUEUE_ID) continue;
+    if (!TRACKED_QUEUES.has(game.queueId)) continue;
     if (hasSent(game.gameId)) continue;
 
     let fullGame: any;

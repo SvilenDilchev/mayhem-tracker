@@ -11,15 +11,10 @@ type SortDir = "asc" | "desc";
 
 export default function Friends() {
   const champData = useChampionData();
-  const { data, loading, refetch } = useIpc<TeammateStats[]>(() => window.api.getTeammateStats());
+  const { data, loading } = useIpc<TeammateStats[]>(() => window.api.getTeammateStats());
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("games");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-
-  useEffect(() => {
-    const unsub = window.api.onGamesUpdated(() => refetch());
-    return unsub;
-  }, [refetch]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {

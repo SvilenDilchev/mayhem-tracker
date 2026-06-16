@@ -88,7 +88,7 @@ function SearchInput({
 export default function GlobalStats() {
   const champData = useChampionData();
   const augmentData = useAugmentData();
-  const { data, loading, refetch } = useIpc<GlobalStats>(() => window.api.getGlobalStats());
+  const { data, loading } = useIpc<GlobalStats>(() => window.api.getGlobalStats());
   const [tab, setTab] = useState<Tab>("champions");
 
   // Champion tab state
@@ -101,11 +101,6 @@ export default function GlobalStats() {
   const [augSortKey, setAugSortKey] = useState<AugSortKey>("picks");
   const [augSortDir, setAugSortDir] = useState<SortDir>("desc");
   const [rarityFilter, setRarityFilter] = useState<RarityFilter>("all");
-
-  useEffect(() => {
-    const unsub = window.api.onGamesUpdated(() => refetch());
-    return unsub;
-  }, [refetch]);
 
   const totalGames = data ? Math.round(data.totalParticipantSlots / 10) : 0;
 

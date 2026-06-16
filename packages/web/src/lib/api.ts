@@ -15,37 +15,46 @@ async function sendJson(path: string, method: string, body?: unknown): Promise<a
 }
 
 function qs(params: Record<string, unknown>): string {
-  const entries = Object.entries(params).filter(([, v]) => v !== undefined);
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null);
   if (entries.length === 0) return "";
   return "?" + entries.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&");
 }
 
 export const api = {
-  getMatchHistory: (limit: number, offset: number) =>
-    getJson(`/api/match-history${qs({ limit, offset })}`),
+  getMatchHistory: (limit: number, offset: number, puuid?: string) =>
+    getJson(`/api/match-history${qs({ limit, offset, puuid })}`),
 
   getMatchDetail: (gameId: number) => getJson(`/api/match-detail/${gameId}`),
 
-  getChampionStats: () => getJson("/api/champion-stats"),
+  getChampionStats: (puuid?: string) =>
+    getJson(`/api/champion-stats${qs({ puuid })}`),
 
-  getAugmentStats: (championId?: number) => getJson(`/api/augment-stats${qs({ championId })}`),
+  getAugmentStats: (championId?: number, puuid?: string) =>
+    getJson(`/api/augment-stats${qs({ championId, puuid })}`),
 
-  getAugmentStatsDetailed: () => getJson("/api/augment-stats-detailed"),
+  getAugmentStatsDetailed: (puuid?: string) =>
+    getJson(`/api/augment-stats-detailed${qs({ puuid })}`),
 
-  getDashboard: () => getJson("/api/dashboard"),
+  getDashboard: (puuid?: string) =>
+    getJson(`/api/dashboard${qs({ puuid })}`),
 
-  getChampionMatchHistory: (championId: number, limit: number, offset: number) =>
-    getJson(`/api/champion-match-history/${championId}${qs({ limit, offset })}`),
+  getChampionMatchHistory: (championId: number, limit: number, offset: number, puuid?: string) =>
+    getJson(`/api/champion-match-history/${championId}${qs({ limit, offset, puuid })}`),
 
-  getChampionItemStats: (championId: number) => getJson(`/api/champion-item-stats/${championId}`),
+  getChampionItemStats: (championId: number, puuid?: string) =>
+    getJson(`/api/champion-item-stats/${championId}${qs({ puuid })}`),
 
-  getTeammateStats: () => getJson("/api/teammate-stats"),
+  getTeammateStats: (puuid?: string) =>
+    getJson(`/api/teammate-stats${qs({ puuid })}`),
 
-  getGlobalStats: () => getJson("/api/global-stats"),
+  getGlobalStats: (puuid?: string) =>
+    getJson(`/api/global-stats${qs({ puuid })}`),
 
   getSummonerPuuid: () => getJson("/api/summoner-puuid"),
 
   getAllSummonerPuuids: () => getJson("/api/all-summoner-puuids"),
+
+  getSummoners: () => getJson("/api/summoners"),
 
   getChampionData: () => getJson("/api/champion-data"),
 

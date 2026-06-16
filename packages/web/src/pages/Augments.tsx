@@ -45,7 +45,7 @@ const rarityFilters: { key: RarityFilter; label: string; color: string; activeCo
 export default function Augments() {
   const champData = useChampionData();
   const augmentData = useAugmentData();
-  const { data, loading, refetch } = useIpc<AugmentStatsDetailed[]>(() =>
+  const { data, loading } = useIpc<AugmentStatsDetailed[]>(() =>
     window.api.getAugmentStatsDetailed(),
   );
   const [search, setSearch] = useState("");
@@ -53,11 +53,6 @@ export default function Augments() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [rarityFilter, setRarityFilter] = useState<RarityFilter>("all");
-
-  useEffect(() => {
-    const unsub = window.api.onGamesUpdated(() => refetch());
-    return unsub;
-  }, [refetch]);
 
   const totalGames = useMemo(() => {
     if (!data || data.length === 0) return 0;
