@@ -1,0 +1,17 @@
+[Unit]
+Description=Mayhem Tracker server
+After=network.target
+
+[Service]
+Type=simple
+User=mayhem
+WorkingDirectory=/mnt/apps/mayhem-tracker
+ExecStart=/usr/bin/npm run start -w @mayhem-tracker/server
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=DATA_DIR=/mnt/data/mayhem-tracker
+
+[Install]
+WantedBy=multi-user.target

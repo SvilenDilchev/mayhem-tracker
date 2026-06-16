@@ -1,0 +1,21 @@
+{
+  "name": "@mayhem-tracker/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p .",
+    "build-agent": "node scripts/build-agent.mjs"
+  },
+  "dependencies": {
+    "league-connect": "^6.0.0-rc13"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "@types/node": "^25.3.1",
+    "esbuild": "^0.25.12",
+    "postject": "^1.0.0-alpha.6"
+  }
+}
