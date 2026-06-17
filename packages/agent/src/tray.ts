@@ -11,10 +11,11 @@ const TRAY_BIN_B64 = typeof __TRAY_BIN_B64__ !== "undefined" ? __TRAY_BIN_B64__ 
 const ICON_B64 = typeof __ICON_B64__ !== "undefined" ? __ICON_B64__ : "";
 
 const QUIT_ID = 1;
+const TRAY_HELPER_NAME = process.platform === "win32" ? "tray-helper.exe" : "tray-helper";
 
 function extractTrayHelper(): string {
   const dir = path.join(os.homedir(), ".mayhem-tracker-agent");
-  const binPath = path.join(dir, "tray-helper.exe");
+  const binPath = path.join(dir, TRAY_HELPER_NAME);
   fs.mkdirSync(dir, { recursive: true });
   if (!fs.existsSync(binPath)) {
     fs.writeFileSync(binPath, Buffer.from(TRAY_BIN_B64, "base64"), { mode: 0o755 });

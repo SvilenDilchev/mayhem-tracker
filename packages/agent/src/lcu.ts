@@ -2,14 +2,16 @@ import { authenticate, createHttp1Request, createWebSocketConnection, Credential
 
 let credentials: Credentials | null = null;
 
+const authOptions = process.platform === "win32" ? { windowsShell: "powershell" } : {};
+
 export async function connect(): Promise<Credentials> {
-  credentials = await authenticate({ windowsShell: "powershell" });
+  credentials = await authenticate(authOptions);
   return credentials;
 }
 
 export async function subscribeToGameflow(onPhase: (phase: string) => void): Promise<void> {
   const ws = await createWebSocketConnection({
-    authenticationOptions: { windowsShell: "powershell" },
+    authenticationOptions: authOptions,
     maxRetries: -1,
   });
   ws.subscribe("/lol/gameflow/v1/gameflow-phase", (data: any) => {

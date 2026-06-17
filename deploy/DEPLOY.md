@@ -80,16 +80,27 @@ DATA_DIR=/mnt/data/mayhem-tracker npm run create-agent -w @mayhem-tracker/server
 
 Prints a token. Repeat once per person (including yourself).
 
-## 7. Build each friend's agent exe
+## 7. Build each friend's agent binary
 
-Build this part **on a Windows machine** (the exe is Windows-only for now) — your own laptop is fine:
+The build must run on the same OS as the target — you can't cross-compile.
 
+**Windows** (run on a Windows machine):
 ```powershell
 cd packages\agent
 npm run build-agent -- --server=https://your.domain.com --token=<token-from-step-6> --name=FriendName
 ```
+Produces `packages/agent/dist/mayhem-agent-FriendName.exe`.
 
-Produces `packages/agent/dist/mayhem-agent-FriendName.exe`. Send that single file to them — no further setup, just run it once (League must be installed; it doesn't need to be open yet, the agent will keep retrying until it is). It registers itself to start automatically on login.
+**Mac** (friend runs this on their own Mac):
+```bash
+cd packages/agent
+npm run build-agent -- --server=https://your.domain.com --token=<token-from-step-6> --name=FriendName
+```
+Produces `packages/agent/dist/mayhem-agent-FriendName`. First run: right-click → Open → Open (Gatekeeper prompt, one time only).
+
+Send the binary to your friend — no further setup needed. It registers itself to start automatically on login.
+
+> **TODO**: Set up GitHub Actions to build all platform binaries in CI so you don't need each person to build their own. One workflow with `windows-latest`, `macos-latest`, `ubuntu-latest` runners, tokens as GitHub secrets, artifacts downloadable from the Actions UI.
 
 ## Updating later
 
