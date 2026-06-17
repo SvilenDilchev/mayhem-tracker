@@ -4,10 +4,11 @@
 declare const __SERVER_URL__: string | undefined;
 declare const __AGENT_TOKEN__: string | undefined;
 
-export const SERVER_URL =
+export const SERVER_URL = (
   (typeof __SERVER_URL__ !== "undefined" ? __SERVER_URL__ : undefined) ??
   process.env.MAYHEM_SERVER_URL ??
-  "http://127.0.0.1:3001";
+  "http://127.0.0.1:3001"
+).replace(/\/+$/, "");
 
 export const AGENT_TOKEN =
   (typeof __AGENT_TOKEN__ !== "undefined" ? __AGENT_TOKEN__ : undefined) ??
