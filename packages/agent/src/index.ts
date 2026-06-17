@@ -1,12 +1,25 @@
 import { SERVER_URL, AGENT_TOKEN, IS_COMPILED } from "./config.js";
-import { connect, fetchCurrentSummoner, fetchMatchHistoryByPuuid, fetchMatchHistory, fetchGameDetails } from "./lcu.js";
+import { connect, fetchCurrentSummoner, fetchMatchHistoryByPuuid, fetchMatchHistory, fetchGameDetails, subscribeToGameflow } from "./lcu.js";
 import { hasSent, markSent, isAutostartRegistered, markAutostartRegistered } from "./state.js";
 import { registerAutostart } from "./autostart.js";
 import { initTray } from "./tray.js";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
-const POLL_INTERVAL_MS = 60_000;
-const CONNECT_RETRY_MS = 5_000;
+const LEAGUE_CHECK_INTERVAL_MS = 60_000;
+const LCU_READY_RETRY_MS = 5_000;
 const TRACKED_QUEUES = new Set([450, 2400]); // normal ARAM + ARAM Mayhem
+const POLL_TRIGGER_PHASES = new Set(["EndOfGame", "None"]);
+
+const logFile = path.join(os.homedir(), ".mayhem-tracker-agent", "agent.log");
+fs.mkdirSync(path.dirname(logFile), { recursive: true });
+
+function log(...args: any[]): void {
+  const line = `[${new Date().toISOString()}] ${args.map(String).join(" ")}\n`;
+  process.stdout.write(line);
+  fs.appendFileSync(logFile, line);
+}
 
 async function submitGames(puuid: string, summonerInfo: any, games: any[]): Promise<void> {
   if (games.length === 0) return;
@@ -26,6 +39,7 @@ async function submitGames(puuid: string, summonerInfo: any, games: any[]): Prom
 
 async function pollOnce(): Promise<void> {
   const summoner = await fetchCurrentSummoner();
+  log(`Polling for summoner puuid=${summoner.puuid} name=${summoner.displayName ?? summoner.gameName ?? "unknown"}`);
 
   let historyResponse: any;
   try {
@@ -35,11 +49,15 @@ async function pollOnce(): Promise<void> {
   }
 
   const games = historyResponse.games?.games || historyResponse.games || [];
+  log(`Fetched ${games.length} games from LCU`);
   const newGames: any[] = [];
 
   for (const game of games) {
     if (!TRACKED_QUEUES.has(game.queueId)) continue;
-    if (hasSent(game.gameId)) continue;
+    if (hasSent(game.gameId)) {
+      log(`Skipping already-sent game ${game.gameId}`);
+      continue;
+    }
 
     let fullGame: any;
     try {
@@ -52,12 +70,25 @@ async function pollOnce(): Promise<void> {
 
   if (newGames.length > 0) {
     await submitGames(summoner.puuid, summoner, newGames);
-    console.log(`Submitted ${newGames.length} new game(s)`);
+    log(`Submitted ${newGames.length} new game(s)`);
+  } else {
+    log("No new games to submit");
+  }
+}
+
+async function connectWithRetry(): Promise<void> {
+  while (true) {
+    try {
+      await connect();
+      return;
+    } catch {
+      await sleep(LEAGUE_CHECK_INTERVAL_MS);
+    }
   }
 }
 
 async function main() {
-  console.log(`Mayhem Tracker agent starting, server=${SERVER_URL}`);
+  log(`Mayhem Tracker agent starting, server=${SERVER_URL}`);
 
   initTray();
 
@@ -67,31 +98,41 @@ async function main() {
   }
 
   while (true) {
-    try {
-      await connect();
-      break;
-    } catch {
-      await sleep(CONNECT_RETRY_MS);
-    }
-  }
-  console.log("Connected to League Client");
+    await connectWithRetry();
+    log("Connected to League Client");
 
-  while (true) {
-    try {
-      await pollOnce();
-    } catch (err) {
-      console.log("Poll error, will retry:", err);
-      // Lost connection — wait for the client to come back.
-      while (true) {
-        try {
-          await connect();
-          break;
-        } catch {
-          await sleep(CONNECT_RETRY_MS);
-        }
+    // LCU HTTP may not be ready immediately after authenticate() — retry for up to 60s
+    let ready = false;
+    for (let i = 0; i < 12; i++) {
+      try {
+        await pollOnce();
+        ready = true;
+        break;
+      } catch (err) {
+        log(`Poll error on connect (attempt ${i + 1}/12), retrying in 5s:`, err);
+        await sleep(LCU_READY_RETRY_MS);
       }
     }
-    await sleep(POLL_INTERVAL_MS);
+    if (!ready) {
+      log("LCU never became ready, reconnecting...");
+      continue;
+    }
+
+    try {
+      await subscribeToGameflow(async (phase) => {
+        if (!POLL_TRIGGER_PHASES.has(phase)) return;
+        log(`Gameflow phase: ${phase} — polling`);
+        try {
+          await pollOnce();
+        } catch (err) {
+          log("Poll error after gameflow event:", err);
+        }
+      });
+      // subscribeToGameflow resolves once the WS closes — reconnect
+      log("WebSocket closed, reconnecting...");
+    } catch (err) {
+      log("WebSocket error, reconnecting:", err);
+    }
   }
 }
 

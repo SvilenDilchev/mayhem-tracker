@@ -1,10 +1,24 @@
-import { authenticate, createHttp1Request, Credentials, HttpRequestOptions } from "league-connect";
+import { authenticate, createHttp1Request, createWebSocketConnection, Credentials, HttpRequestOptions } from "league-connect";
 
 let credentials: Credentials | null = null;
 
 export async function connect(): Promise<Credentials> {
   credentials = await authenticate({ windowsShell: "powershell" });
   return credentials;
+}
+
+export async function subscribeToGameflow(onPhase: (phase: string) => void): Promise<void> {
+  const ws = await createWebSocketConnection({
+    authenticationOptions: { windowsShell: "powershell" },
+    maxRetries: -1,
+  });
+  ws.subscribe("/lol/gameflow/v1/gameflow-phase", (data: any) => {
+    onPhase(typeof data === "string" ? data : data?.data ?? "");
+  });
+  return new Promise((resolve) => {
+    ws.on("close", resolve);
+    ws.on("error", resolve);
+  });
 }
 
 async function lcuRequest(url: string, method: HttpRequestOptions["method"] = "GET") {

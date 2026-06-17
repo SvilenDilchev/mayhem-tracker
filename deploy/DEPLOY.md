@@ -100,3 +100,40 @@ npm install
 npm run build -w @mayhem-tracker/web
 pm2 restart mayhem-tracker
 ```
+
+## Maintenance
+
+### Clear game data only (keep agent tokens)
+
+Use this when you want a fresh start without having to rebuild and redistribute agent exes:
+
+```bash
+sqlite3 /mnt/data/mayhem-tracker/matches.db "DELETE FROM game_augments; DELETE FROM player_stats; DELETE FROM games; DELETE FROM summoner;"
+```
+
+### Full DB reset
+
+Wipes everything including agent tokens — you'll need to re-mint tokens (step 6) and rebuild all agent exes (step 7) after this:
+
+```bash
+rm /mnt/data/mayhem-tracker/matches.db && pm2 restart mayhem-tracker
+```
+
+### Clear a Windows agent's local cache
+
+The agent tracks which games it has already sent in `~/.mayhem-tracker-agent/state.json`. If the server DB was wiped, delete this file so the agent re-submits its history on the next poll:
+
+```bash
+rm ~/.mayhem-tracker-agent/state.json
+```
+
+### View agent logs
+
+The agent writes logs to `~/.mayhem-tracker-agent/agent.log` on the user's Windows machine. Useful for debugging sync issues.
+
+### Check server logs
+
+```bash
+pm2 logs mayhem-tracker --lines 50
+sudo tail -50 /var/log/nginx/access.log
+```
