@@ -4,7 +4,7 @@ module.exports = {
       name: "mayhem-tracker",
       script: "npm",
       args: "run start -w @mayhem-tracker/server",
-      cwd: "/mnt/apps/mayhem-tracker",
+      cwd: require("path").join(__dirname, ".."), // repo root
       env: {
         NODE_ENV: "production",
         PORT: "3001",

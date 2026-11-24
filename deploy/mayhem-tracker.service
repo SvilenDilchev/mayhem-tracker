@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=mayhem
-WorkingDirectory=/mnt/apps/mayhem-tracker
+WorkingDirectory=/mnt/apps/projects/mayhem-tracker
 ExecStart=/usr/bin/npm run start -w @mayhem-tracker/server
 Restart=on-failure
 RestartSec=5

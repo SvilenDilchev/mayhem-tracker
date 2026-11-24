@@ -1,14 +1,14 @@
 # Deploying to your Ubuntu server
 
-App code lives at `/mnt/apps/mayhem-tracker`, the SQLite DB at `/mnt/data/mayhem-tracker` — separate mounts, set via `DATA_DIR` in `deploy/ecosystem.config.cjs`. Runs under your own user (`svilen`) via pm2.
+App code lives at `/mnt/apps/projects/mayhem-tracker`, the SQLite DB at `/mnt/data/mayhem-tracker` — separate mounts, set via `DATA_DIR` in `deploy/ecosystem.config.cjs`. Runs via pm2 as the unprivileged `apps` user (`pm2-apps.service`); `pm2` in svilen's shell is aliased to `sudo -u apps -H pm2`.
 
 ## 1. Get the code + dependencies onto the server
 
 ```bash
-sudo mkdir -p /mnt/apps/mayhem-tracker /mnt/data/mayhem-tracker
-sudo chown $USER:$USER /mnt/apps/mayhem-tracker /mnt/data/mayhem-tracker
-git clone <your-repo-url> /mnt/apps/mayhem-tracker
-cd /mnt/apps/mayhem-tracker
+sudo mkdir -p /mnt/apps/projects/mayhem-tracker /mnt/data/mayhem-tracker
+sudo chown $USER:$USER /mnt/apps/projects/mayhem-tracker /mnt/data/mayhem-tracker
+git clone <your-repo-url> /mnt/apps/projects/mayhem-tracker
+cd /mnt/apps/projects/mayhem-tracker
 npm install
 ```
 
@@ -26,7 +26,7 @@ npm run build -w @mayhem-tracker/web
 
 ```bash
 sudo npm install -g pm2
-cd /mnt/apps/mayhem-tracker
+cd /mnt/apps/projects/mayhem-tracker
 pm2 start deploy/ecosystem.config.cjs
 pm2 status
 ```
@@ -74,7 +74,7 @@ At this point `https://your.domain.com` should show the dashboard (empty until a
 ## 6. Mint an agent token per friend
 
 ```bash
-cd /mnt/apps/mayhem-tracker
+cd /mnt/apps/projects/mayhem-tracker
 DATA_DIR=/mnt/data/mayhem-tracker npm run create-agent -w @mayhem-tracker/server -- "FriendName"
 ```
 
@@ -105,7 +105,7 @@ Send the binary to your friend — no further setup needed. It registers itself 
 ## Updating later
 
 ```bash
-cd /mnt/apps/mayhem-tracker
+cd /mnt/apps/projects/mayhem-tracker
 git pull
 npm install
 npm run build -w @mayhem-tracker/web
