@@ -8,7 +8,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "3001",
-        DATA_DIR: "/mnt/data/mayhem-tracker",
+        DATA_DIR: "/mnt/data/projects/mayhem-tracker",
       },
     },
   ],

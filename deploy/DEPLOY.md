@@ -1,12 +1,12 @@
 # Deploying to your Ubuntu server
 
-App code lives at `/mnt/apps/projects/mayhem-tracker`, the SQLite DB at `/mnt/data/mayhem-tracker` — separate mounts, set via `DATA_DIR` in `deploy/ecosystem.config.cjs`. Runs via pm2 as the unprivileged `apps` user (`pm2-apps.service`); `pm2` in svilen's shell is aliased to `sudo -u apps -H pm2`.
+App code lives at `/mnt/apps/projects/mayhem-tracker`, the SQLite DB at `/mnt/data/projects/mayhem-tracker` — separate mounts, set via `DATA_DIR` in `deploy/ecosystem.config.cjs`. Runs via pm2 as the unprivileged `apps` user (`pm2-apps.service`); `pm2` in svilen's shell is aliased to `sudo -u apps -H pm2`.
 
 ## 1. Get the code + dependencies onto the server
 
 ```bash
-sudo mkdir -p /mnt/apps/projects/mayhem-tracker /mnt/data/mayhem-tracker
-sudo chown $USER:$USER /mnt/apps/projects/mayhem-tracker /mnt/data/mayhem-tracker
+sudo mkdir -p /mnt/apps/projects/mayhem-tracker /mnt/data/projects/mayhem-tracker
+sudo chown $USER:$USER /mnt/apps/projects/mayhem-tracker /mnt/data/projects/mayhem-tracker
 git clone <your-repo-url> /mnt/apps/projects/mayhem-tracker
 cd /mnt/apps/projects/mayhem-tracker
 npm install
@@ -31,7 +31,7 @@ pm2 start deploy/ecosystem.config.cjs
 pm2 status
 ```
 
-It listens on `127.0.0.1:3001` only — not exposed externally. Data lives in `/mnt/data/mayhem-tracker` (set via `DATA_DIR` in `deploy/ecosystem.config.cjs`).
+It listens on `127.0.0.1:3001` only — not exposed externally. Data lives in `/mnt/data/projects/mayhem-tracker` (set via `DATA_DIR` in `deploy/ecosystem.config.cjs`).
 
 ## 4. Make it survive a reboot
 
@@ -75,7 +75,7 @@ At this point `https://your.domain.com` should show the dashboard (empty until a
 
 ```bash
 cd /mnt/apps/projects/mayhem-tracker
-DATA_DIR=/mnt/data/mayhem-tracker npm run create-agent -w @mayhem-tracker/server -- "FriendName"
+DATA_DIR=/mnt/data/projects/mayhem-tracker npm run create-agent -w @mayhem-tracker/server -- "FriendName"
 ```
 
 Prints a token. Repeat once per person (including yourself).
@@ -119,7 +119,7 @@ pm2 restart mayhem-tracker
 Use this when you want a fresh start without having to rebuild and redistribute agent exes:
 
 ```bash
-sqlite3 /mnt/data/mayhem-tracker/matches.db "DELETE FROM game_augments; DELETE FROM player_stats; DELETE FROM games; DELETE FROM summoner;"
+sqlite3 /mnt/data/projects/mayhem-tracker/matches.db "DELETE FROM game_augments; DELETE FROM player_stats; DELETE FROM games; DELETE FROM summoner;"
 ```
 
 ### Full DB reset
@@ -127,7 +127,7 @@ sqlite3 /mnt/data/mayhem-tracker/matches.db "DELETE FROM game_augments; DELETE F
 Wipes everything including agent tokens — you'll need to re-mint tokens (step 6) and rebuild all agent exes (step 7) after this:
 
 ```bash
-rm /mnt/data/mayhem-tracker/matches.db && pm2 restart mayhem-tracker
+rm /mnt/data/projects/mayhem-tracker/matches.db && pm2 restart mayhem-tracker
 ```
 
 ### Clear a Windows agent's local cache
